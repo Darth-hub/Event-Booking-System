@@ -4,7 +4,7 @@ Started: 16 October 2026 (Asia/Kolkata)
 
 ## Current position
 
-Phase 0: Requirements and capacity estimation — functional scope discussed; capacity estimation and checkpoint pending. See [Phase 0 requirements](phase-0-requirements.md).
+Phase 1: HLD — starting the component diagram and stack discussion at the user's request. Phase 0 requirements and capacity assumptions have been discussed; checkpoint follow-up remains unassessed. See [Phase 0 requirements](phase-0-requirements.md).
 No architecture, schema, API contract, or application code has been finalized.
 Phase 0 checkpoint attempted; a daily-versus-concurrent-user clarification is pending. No phase has been marked passed.
 
@@ -28,8 +28,8 @@ The user wants to learn during the build, understand the stack and implementatio
 
 | Phase | Topic | Deliverables | Status |
 | --- | --- | --- | --- |
-| 0 | Requirements + capacity estimation | Feature list, scale numbers, what is out of scope | In progress |
-| 1 | HLD | Component diagram, stack decisions | Not started |
+| 0 | Requirements + capacity estimation | Feature list, scale numbers, what is out of scope | Discussed; checkpoint follow-up unassessed |
+| 1 | HLD | Component diagram, stack decisions | In progress |
 | 2 | Data model | Schema, normalization, indexes | Not started |
 | 3 | API design | Endpoints, request/response shapes, error codes | Not started |
 | 4 | Core flow | Hold → confirm → expire, concurrency strategy | Not started |
@@ -76,7 +76,7 @@ Each phase includes a checkpoint grill. Earlier designs may be revised when late
 2. Hold expiry: user correctly explained that unbooked seats must return to availability. Clarification supplied: explicit release may never arrive after a closed tab, lost connection, or crashed client; server-side expiry must work independently.
 3. Lost confirmation response: user correctly stated that retry must recover the committed booking without creating another and that payment success must be distinguished from booking confirmation.
 
-Outcome: core ideas mostly understood; follow-up pending. Do not mark Phase 0 complete or proceed to HLD yet.
+Outcome: core ideas mostly understood; follow-up unassessed. The user subsequently asked to move ahead, so HLD has started without recording a checkpoint pass. Reference answer supplied: 50 concurrent users / five seconds = 10 RPS.
 
 For each checkpoint, record the questions, the user's reasoning, corrections, unresolved gaps, and outcome.
 
@@ -139,3 +139,11 @@ Use https://github.com/Darth-hub/Event-Booking-System for project work. Agree on
 - Proposed performance target: p95 backend response time at most 500 ms under the planned 10 RPS workload, including database work and excluding network travel and deliberate payment-simulation delays. Environment, request mix, measurement window, and achieved capacity remain unspecified.
 - Discussed correctness, atomic multi-seat acquisition, retry safety, ownership authorization, server pricing, and safe handling of uncertain mutation outcomes.
 - Recorded the user's three Phase 0 checkpoint answers above. Daily versus concurrent activity needs clarification before HLD; no checkpoint pass recorded.
+
+### 16 October 2026 — HLD started at user request
+
+- User asked to move ahead without answering the checkpoint follow-up. Proceeded to HLD; no answer or pass inferred.
+- Proposed starting architecture: React browser client → Node.js/Express backend → PostgreSQL. One deployable backend with internal responsibilities for authentication, browsing, holds, bookings, simulated payments, and expiry cleanup; these are not separate network services.
+- Database is authoritative for seat ownership, hold deadlines, prices, bookings, and retry outcomes. Request paths must enforce expiry independently of cleanup punctuality.
+- Teaching focus: component responsibilities, frontend/backend trust boundary, and why short database transactions support all-or-nothing booking changes. Transactions alone do not establish the no-double-booking guarantee; concurrency strategy and constraints remain for later phases.
+- Added Notes to keep in the teaching response. Architecture and stack remain proposals for discussion; implementation has not started.
