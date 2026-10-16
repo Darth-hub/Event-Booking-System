@@ -4,7 +4,7 @@ Started: 16 October 2026 (Asia/Kolkata)
 
 ## Current position
 
-Phase 2: Data model — beginning with physical seats versus per-show seat inventory. Initial HLD discussion completed and its hold-durability checkpoint passed. Phase 0 follow-up remains unassessed. See [Phase 0 requirements](phase-0-requirements.md) and [HLD](phase-1-hld.md).
+Phase 2: Data model — catalogue relationships and proposed user/hold/booking aggregates discussed. Schema columns, normalization review, constraints, indexes, and the phase checkpoint remain pending. See [data model notes](phase-2-data-model.md), [Phase 0 requirements](phase-0-requirements.md), and [HLD](phase-1-hld.md).
 An initial HLD baseline is documented; schema, API contracts, and application implementation remain pending.
 Phase 0 checkpoint attempted; a daily-versus-concurrent-user follow-up remains unassessed. The Phase 1 hold-durability/statelessness checkpoint passed.
 
@@ -169,3 +169,12 @@ Use https://github.com/Darth-hub/Event-Booking-System for project work. Agree on
 - User passed the asked HLD checkpoint on persisted holds and API restarts. No implementation or load-test result is implied.
 - Starting Phase 2 with the distinction between a physical seat in a screen and inventory for that seat in a particular show. Booking/hold status belongs to the show-seat allocation, not the physical seat itself.
 - Next work: agree on entities and relationships, then schema, normalization, constraints, and indexes. Detailed payment recovery and transaction algorithms remain later-phase work.
+
+### 16 October 2026 — catalogue and booking relationships
+
+- Explained cities → theatres → screens → physical seats, with movies → shows hosted in screens, and per-show seat inventory.
+- Proposed eager inventory provisioning when a show is created. Example: 100 physical seats across four shows produce 400 show-seat records.
+- Required both unique show/seat identity and compatibility between a show's screen and a physical seat's screen; exact enforcement remains to be designed.
+- Proposed separate users, holds/hold_items, and bookings/booking_items so multi-seat selections and purchases are explicit aggregates with preserved membership and price snapshots.
+- Distinguished historical hold membership from current allocation, and temporary holds/payment attempts from confirmed bookings. Payment/idempotency modelling is next.
+- Saved the conceptual ER diagrams, reasoning, open issues, and study notes in `phase-2-data-model.md`. These are proposals, not a finalized schema or a passed checkpoint.
