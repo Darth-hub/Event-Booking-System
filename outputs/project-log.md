@@ -147,3 +147,12 @@ Use https://github.com/Darth-hub/Event-Booking-System for project work. Agree on
 - Database is authoritative for seat ownership, hold deadlines, prices, bookings, and retry outcomes. Request paths must enforce expiry independently of cleanup punctuality.
 - Teaching focus: component responsibilities, frontend/backend trust boundary, and why short database transactions support all-or-nothing booking changes. Transactions alone do not establish the no-double-booking guarantee; concurrency strategy and constraints remain for later phases.
 - Added Notes to keep in the teaching response. Architecture and stack remain proposals for discussion; implementation has not started.
+
+### 16 October 2026 — HLD detail and payment boundary revised
+
+- User requested internal Auth, Catalog, Hold, Booking, and Payment boxes; a swappable mock gateway; a scheduled housekeeping job; database responsibilities; JWT; stateless API labeling; two-way links; and a hold-to-confirm sequence.
+- Saved diagrams and study notes in `phase-1-hld.md`. Module boxes are code boundaries in one process. JWT was requested by the user; token handling details remain open.
+- Corrected the proposed sequence: conditional multi-seat writes require all-or-nothing validation; idempotency needs atomic claiming; persisted PAYMENT_PENDING is distinct from a database lock; gateway calls occur outside database transactions.
+- Distinguished a committed booking with a lost API response from an unknown gateway outcome. Both API and gateway operations need retry identities; their mapping must survive restarts.
+- New unresolved requirement: uncertain payments need protected inventory and outcome recovery; blindly applying the ordinary hold expiry can sell seats while an earlier charge may have succeeded. Recovery policy, timing, and allocation-release rules are mandatory Phase 4 work.
+- PostgreSQL remains the only application persistent store. Mock gateway replay/recovery behavior must be designed explicitly; exact API contracts, schema, and concurrency implementation remain provisional.
