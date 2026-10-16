@@ -4,7 +4,7 @@ Started: 16 October 2026 (Asia/Kolkata)
 
 ## Current position
 
-Phase 0: Requirements and capacity estimation — started; requirements discussion pending.
+Phase 0: Requirements and capacity estimation — functional scope discussed; capacity estimation and checkpoint pending. See [Phase 0 requirements](phase-0-requirements.md).
 No architecture, schema, API contract, or application code has been finalized.
 No phase checkpoint has been attempted or passed.
 
@@ -72,6 +72,8 @@ Each phase includes a checkpoint grill. Earlier designs may be revised when late
 
 No checkpoints attempted yet.
 
+Pending scope questions: why explicit release cannot replace expiry; how to recover a booking when confirmation succeeds but the response is lost. No answers or passing result recorded yet.
+
 For each checkpoint, record the questions, the user's reasoning, corrections, unresolved gaps, and outcome.
 
 ## Experiments and measurements
@@ -115,3 +117,12 @@ Use https://github.com/Darth-hub/Event-Booking-System for project work. Agree on
 - No application code has been started; Phase 0 remains pending discussion and checkpoint.
 - Published all four initial documents through the GitHub integration and verified their contents against the local files.
 - Configured local `origin` to the verified GitHub URL. Direct Git fetch timed out, so local and remote commit histories are not yet synchronized; use the integration for remote file updates until Git transport works, then reconcile histories without overwriting remote work.
+
+### 16 October 2026 — workflow efficiency and scope discussion
+
+- User requested concise exchanges, manual participation, and targeted connector use to conserve usage. Batch log updates at meaningful milestones; exact per-message token consumption is not available.
+- User expanded version one with early hold release, hold limits, city/date filtering, authoritative server pricing, and a lost-response simulation.
+- Adopted the invariant of at most one confirmed booking per show-seat; payment failures retain holds until the original expiry. Cancellation, refunds, WebSockets, refresh tokens, OAuth, and an admin interface are outside version one.
+- Recorded a proposed five-minute hold duration and a ten-seat cap in `phase-0-requirements.md`; these defaults still need user confirmation.
+- Captured limitations: browser-close release is best effort, per-account hold limits are incomplete abuse protection, and cancellation requires more than a new enum value.
+- Scope and consistency requirements are documented; architecture, schema representation, capacity estimates, and checkpoint outcomes remain open.
