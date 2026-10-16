@@ -1,6 +1,6 @@
 # Phase 1 — high-level design
 
-Status: proposed design under discussion. Module responsibilities are established at HLD level; exact schema, routes, SQL, state transitions, and recovery policy remain for later phases.
+Status: initial HLD discussion completed; hold-durability/statelessness checkpoint passed. Exact schema, routes, SQL, state transitions, authentication details, and payment recovery policy remain for their later design phases.
 
 ## Component diagram
 
@@ -102,6 +102,29 @@ sequenceDiagram
 - Payment failure and payment uncertainty require different handling.
 - API retry safety and gateway retry safety must both be designed.
 - Correctness of ordinary hold expiry must not depend on scheduler punctuality.
+
+## Stack rationale and limitations
+
+| Choice | Rationale | Trade-off |
+| --- | --- | --- |
+| React | Familiar stack; interactive seat selection, filters, and checkout UI | Browser state can be stale and cannot authorize booking changes |
+| Node.js | Familiar JavaScript and primarily database/network I/O | Synchronous CPU-heavy work can block request handling |
+| Express | Routing and middleware with visible request handling | Project must define module boundaries, validation, and consistent errors |
+| PostgreSQL | Relational catalogue and transactional booking changes with constraints and concurrency controls | Query/index design, transaction duration, and connection budgeting require care |
+
+One API instance and one database simplify operations but leave availability limitations: an API outage interrupts requests and a database outage interrupts authoritative booking operations. Statelessness supports adding API instances; it is not by itself high availability.
+
+## HLD checkpoint — hold durability
+
+User correctly explained that an API restart must not discard a committed hold: PostgreSQL stores the ownership, hold identity, and deadline; the client supplies its hold identity and a JWT identifies the user; another API instance retrieves and validates that persisted state.
+
+Outcome: passed for the asked checkpoint. Their illustrative `show_seats` fields and SELECT are proposals, not finalized schema or production validation logic.
+
+Clarifications:
+
+- A hold's original deadline continues through a restart. A restarted instance does not extend it; an already expired hold is not confirmable as an ordinary active hold.
+- Statelessness permits temporary request variables and non-authoritative caches. It forbids relying exclusively on one instance's memory or timers for durable hold correctness.
+- Confirmation must validate state and ownership atomically with the relevant mutation; a standalone SELECT followed by an unprotected write is insufficient. Existing payment-pending recovery is distinct from validating a fresh hold.
 
 ## Sources
 
