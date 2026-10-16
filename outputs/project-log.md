@@ -6,7 +6,7 @@ Started: 16 October 2026 (Asia/Kolkata)
 
 Phase 0: Requirements and capacity estimation — functional scope discussed; capacity estimation and checkpoint pending. See [Phase 0 requirements](phase-0-requirements.md).
 No architecture, schema, API contract, or application code has been finalized.
-No phase checkpoint has been attempted or passed.
+Phase 0 checkpoint attempted; a daily-versus-concurrent-user clarification is pending. No phase has been marked passed.
 
 ## Purpose and context
 
@@ -70,9 +70,13 @@ Each phase includes a checkpoint grill. Earlier designs may be revised when late
 
 ## Checkpoint record
 
-No checkpoints attempted yet.
+### Phase 0 — first attempt
 
-Pending scope questions: why explicit release cannot replace expiry; how to recover a booking when confirmation succeeds but the response is lost. No answers or passing result recorded yet.
+1. Registered users versus RPS: user correctly identified 2,000 as total registrations and gave `RPS = active users × requests per user per second`, but described active users as 20% of total. Correction: 20% was the assumed daily active proportion (400 DAU); the assumed peak simultaneously active population was 50. Checkpoint remains pending a short follow-up on which population belongs in the peak-RPS calculation.
+2. Hold expiry: user correctly explained that unbooked seats must return to availability. Clarification supplied: explicit release may never arrive after a closed tab, lost connection, or crashed client; server-side expiry must work independently.
+3. Lost confirmation response: user correctly stated that retry must recover the committed booking without creating another and that payment success must be distinguished from booking confirmation.
+
+Outcome: core ideas mostly understood; follow-up pending. Do not mark Phase 0 complete or proceed to HLD yet.
 
 For each checkpoint, record the questions, the user's reasoning, corrections, unresolved gaps, and outcome.
 
@@ -126,3 +130,12 @@ Use https://github.com/Darth-hub/Event-Booking-System for project work. Agree on
 - Recorded a proposed five-minute hold duration and a ten-seat cap in `phase-0-requirements.md`; these defaults still need user confirmation.
 - Captured limitations: browser-close release is best effort, per-account hold limits are incomplete abuse protection, and cancellation requires more than a new enum value.
 - Scope and consistency requirements are documented; architecture, schema representation, capacity estimates, and checkpoint outcomes remain open.
+
+### 16 October 2026 — capacity lesson, study notes, and first checkpoint
+
+- User requested a concise “Notes to keep” block at each teaching step, including concepts, decisions, reasons, and interview takeaways.
+- Planning assumptions presented, not measured or explicitly confirmed: 2,000 registered users, 400 DAU (20%), 20 API requests per daily user, 8,000 API requests/day, 50 peak concurrent active users, and one request per five seconds per active user (10 peak RPS). Static assets excluded.
+- Booking assumptions presented: 10% of daily visitors make one booking, yielding 40 bookings/day; three seats per booking yields 120 booked seats/day, about 14,600 bookings and 43,800 booked-seat records per year. Storage bytes and retention policy remain undecided.
+- Proposed performance target: p95 backend response time at most 500 ms under the planned 10 RPS workload, including database work and excluding network travel and deliberate payment-simulation delays. Environment, request mix, measurement window, and achieved capacity remain unspecified.
+- Discussed correctness, atomic multi-seat acquisition, retry safety, ownership authorization, server pricing, and safe handling of uncertain mutation outcomes.
+- Recorded the user's three Phase 0 checkpoint answers above. Daily versus concurrent activity needs clarification before HLD; no checkpoint pass recorded.
