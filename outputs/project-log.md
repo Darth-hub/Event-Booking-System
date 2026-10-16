@@ -113,3 +113,5 @@ Use https://github.com/Darth-hub/Event-Booking-System for project work. Agree on
 - This name supersedes the earlier proposed repository name. The movie-show seat-booking scope remains unchanged.
 - Initial repository documents comprise the README, ignore rules, collaboration instructions, and this canonical project log.
 - No application code has been started; Phase 0 remains pending discussion and checkpoint.
+- Published all four initial documents through the GitHub integration and verified their contents against the local files.
+- Configured local `origin` to the verified GitHub URL. Direct Git fetch timed out, so local and remote commit histories are not yet synchronized; use the integration for remote file updates until Git transport works, then reconcile histories without overwriting remote work.
