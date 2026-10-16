@@ -4,9 +4,9 @@ Started: 16 October 2026 (Asia/Kolkata)
 
 ## Current position
 
-Phase 1: HLD — starting the component diagram and stack discussion at the user's request. Phase 0 requirements and capacity assumptions have been discussed; checkpoint follow-up remains unassessed. See [Phase 0 requirements](phase-0-requirements.md).
-No architecture, schema, API contract, or application code has been finalized.
-Phase 0 checkpoint attempted; a daily-versus-concurrent-user clarification is pending. No phase has been marked passed.
+Phase 2: Data model — beginning with physical seats versus per-show seat inventory. Initial HLD discussion completed and its hold-durability checkpoint passed. Phase 0 follow-up remains unassessed. See [Phase 0 requirements](phase-0-requirements.md) and [HLD](phase-1-hld.md).
+An initial HLD baseline is documented; schema, API contracts, and application implementation remain pending.
+Phase 0 checkpoint attempted; a daily-versus-concurrent-user follow-up remains unassessed. The Phase 1 hold-durability/statelessness checkpoint passed.
 
 ## Purpose and context
 
@@ -29,8 +29,8 @@ The user wants to learn during the build, understand the stack and implementatio
 | Phase | Topic | Deliverables | Status |
 | --- | --- | --- | --- |
 | 0 | Requirements + capacity estimation | Feature list, scale numbers, what is out of scope | Discussed; checkpoint follow-up unassessed |
-| 1 | HLD | Component diagram, stack decisions | In progress |
-| 2 | Data model | Schema, normalization, indexes | Not started |
+| 1 | HLD | Component diagram, stack decisions | Initial design completed; asked checkpoint passed |
+| 2 | Data model | Schema, normalization, indexes | In progress |
 | 3 | API design | Endpoints, request/response shapes, error codes | Not started |
 | 4 | Core flow | Hold → confirm → expire, concurrency strategy | Not started |
 | 5 | LLD | Layers, classes, patterns | Not started |
@@ -79,6 +79,12 @@ Each phase includes a checkpoint grill. Earlier designs may be revised when late
 Outcome: core ideas mostly understood; follow-up unassessed. The user subsequently asked to move ahead, so HLD has started without recording a checkpoint pass. Reference answer supplied: 50 concurrent users / five seconds = 10 RPS.
 
 For each checkpoint, record the questions, the user's reasoning, corrections, unresolved gaps, and outcome.
+
+### Phase 1 checkpoint — API restart during a hold
+
+User correctly explained that a committed hold lives in PostgreSQL rather than instance memory, and that another instance can retrieve it using its hold identity and authenticated ownership. Their shared-seat-chart analogy correctly captures why API restarts do not destroy durable holds.
+
+Outcome: passed for the asked checkpoint. Clarified that deadlines still apply through restarts, temporary request memory is compatible with statelessness, and SELECT alone is not the final atomic confirmation algorithm. Illustrative schema fields remain provisional.
 
 ## Experiments and measurements
 
@@ -156,3 +162,10 @@ Use https://github.com/Darth-hub/Event-Booking-System for project work. Agree on
 - Distinguished a committed booking with a lost API response from an unknown gateway outcome. Both API and gateway operations need retry identities; their mapping must survive restarts.
 - New unresolved requirement: uncertain payments need protected inventory and outcome recovery; blindly applying the ordinary hold expiry can sell seats while an earlier charge may have succeeded. Recovery policy, timing, and allocation-release rules are mandatory Phase 4 work.
 - PostgreSQL remains the only application persistent store. Mock gateway replay/recovery behavior must be designed explicitly; exact API contracts, schema, and concurrency implementation remain provisional.
+
+### 16 October 2026 — HLD checkpoint and data-model transition
+
+- Recorded React/Node.js/Express/PostgreSQL rationale, operational trade-offs, and the difference between statelessness and high availability in the HLD document.
+- User passed the asked HLD checkpoint on persisted holds and API restarts. No implementation or load-test result is implied.
+- Starting Phase 2 with the distinction between a physical seat in a screen and inventory for that seat in a particular show. Booking/hold status belongs to the show-seat allocation, not the physical seat itself.
+- Next work: agree on entities and relationships, then schema, normalization, constraints, and indexes. Detailed payment recovery and transaction algorithms remain later-phase work.
