@@ -146,3 +146,92 @@ Unresolved: preventing overlapping show schedules in one screen, transactionally
 - TIMESTAMPTZ represents an instant; retain the relevant locality's timezone separately for city/date browsing.
 
 Source: [PostgreSQL constraints](https://www.postgresql.org/docs/current/ddl-constraints.html).
+
+## Transactional columns — working proposal
+
+Entity IDs and references use UUID. Amounts are INTEGER minor units; timestamps are TIMESTAMPTZ. Listed fields are required unless marked nullable. Creation/update audit timestamps are recorded where relevant and omitted from some rows for readability. State fields use TEXT with explicit CHECK lists in the working design; application enums can mirror these values later.
+
+| Table | Proposed columns beyond its primary identity | Direct constraints |
+| --- | --- | --- |
+| users | id, email_normalized TEXT, password_hash TEXT, created_at | PK(id); UNIQUE(email_normalized); never store the plaintext password |
+| holds | id, user_id, show_id, status TEXT, seat_count SMALLINT, total_minor INTEGER, currency CHAR(3), created_at, expires_at, updated_at | User/show FKs; seat_count BETWEEN 1 AND 10; total_minor >= 0; currency INR; expires_at > created_at; allowed statuses |
+| hold_items | hold_id, show_seat_id, quoted_price_minor INTEGER | Composite PK(hold_id, show_seat_id); hold/inventory FKs; quoted_price_minor >= 0 |
+| payment_attempts | id, hold_id, amount_minor INTEGER, currency CHAR(3), status TEXT, gateway_key TEXT, gateway_reference TEXT nullable, created_at, updated_at | Hold FK; UNIQUE(gateway_key); amount_minor >= 0; currency INR; allowed states; success requires a gateway reference |
+| bookings | id, hold_id, user_id, show_id, payment_attempt_id, status TEXT, total_minor INTEGER, currency CHAR(3), confirmed_at | Relevant FKs; UNIQUE(hold_id); UNIQUE(payment_attempt_id); nonnegative total; initial status CONFIRMED; currency INR |
+| booking_items | booking_id, show_seat_id, paid_price_minor INTEGER | Composite PK(booking_id, show_seat_id); parent/inventory FKs; UNIQUE(show_seat_id) for v1; paid_price_minor >= 0 |
+| idempotency_records | id, user_id, operation TEXT, key TEXT, request_hash TEXT, status TEXT, payment_attempt_id nullable, response_status SMALLINT nullable, response_body JSONB nullable, created_at, updated_at | User/attempt FKs; UNIQUE(user_id, operation, key); status PROCESSING or COMPLETED; completed operations require a persisted terminal response |
+
+Email normalization policy and password-hashing implementation remain security/API design work. A normalized email is the uniqueness target; UUID secrecy is not access control. Idempotency claim, attempt creation, and linking are coordinated transactionally before an external call; nullable attempt/result fields account for processing and operations rejected before payment begins. Lease/recovery ownership and retention will be specified later.
+
+### Hold lifecycle and live-hold uniqueness
+
+Working hold statuses: HELD, PAYMENT_PENDING, CONFIRMED, RELEASED, EXPIRED.
+
+Proposed database enforcement for one live hold per user and show:
+
+```text
+UNIQUE(user_id, show_id) WHERE status IN ('HELD', 'PAYMENT_PENDING')
+```
+
+This is a partial unique index, not ordinary uniqueness over all historical holds. It includes PAYMENT_PENDING because uncertain payments still protect inventory. Historical released, expired, and confirmed holds remain queryable.
+
+Time passing alone does not update a row or remove it from this index. The request path must atomically retire an expired ordinary HELD record before inserting its replacement. It must never retire a PAYMENT_PENDING hold solely because its original five-minute deadline passed. Cleanup remains housekeeping; requests perform required expiry transitions themselves. Do not use `expires_at > now()` as the index predicate.
+
+Payment definitely failing returns its hold to HELD if the original deadline is still valid, otherwise it expires and releases ordinary inventory. Failure must not extend the original deadline. Releasing or replacing pending-payment allocations requires the later recovery policy.
+
+### Payment attempt exclusivity
+
+Working payment statuses: PENDING, SUCCEEDED, FAILED, UNKNOWN.
+
+Proposed partial unique index:
+
+```text
+UNIQUE(hold_id) WHERE status IN ('PENDING', 'UNKNOWN', 'SUCCEEDED')
+```
+
+This permits sequential new attempts after definitive failures, prevents competing active attempts, and preserves exclusivity after payment succeeds even if booking finalization has not yet completed. Retry/recovery of an existing attempt does not create another row. The hold/attempt transaction must establish exclusivity before invoking the gateway; a database error after charging is not a strategy for avoiding duplicate charges.
+
+### Current show-seat allocation
+
+Add these fields to `show_seats`:
+
+- `status`: AVAILABLE, HELD, or BOOKED.
+- `active_hold_id`: nullable FK to holds.
+- `booking_id`: nullable FK to bookings.
+
+Row-level CHECK rules:
+
+| State | active_hold_id | booking_id |
+| --- | --- | --- |
+| AVAILABLE | NULL | NULL |
+| HELD | NOT NULL | NULL |
+| BOOKED | NULL | NOT NULL |
+
+Hold deadlines remain on holds; do not duplicate the authoritative expiry on every inventory row. A seat still labelled HELD can be logically expired through its ordinary hold's deadline and reclaimed transactionally. When the parent hold is PAYMENT_PENDING, its original deadline alone does not authorize reclaiming it.
+
+Same-show, same-owner, allocation/membership compatibility, and booking/payment-attempt compatibility require composite references where appropriate and transactional validation. Individual FKs and the row-state CHECK alone do not prove those relationships. Final composite-key layout and write ordering remain for the normalization/schema review; no DDL has yet been generated.
+
+### Direct constraints versus transaction invariants
+
+Database-declared constraints provide the listed uniqueness, existence, and row-shape rules. The application transaction must additionally validate:
+
+- Every selected seat belongs to the hold's show.
+- The distinct hold-item count matches the declared 1–10 seat_count; a CHECK on the header alone cannot count item rows.
+- All requested seats are acquired or none are acquired.
+- Price snapshots sum to the stored total and match the server-approved quote/currency.
+- Confirmation consumes exactly the accepted hold seat set, belongs to its owner, and uses a successful payment attempt for that hold and amount.
+- State transitions respect deadlines and uncertain-payment protection.
+
+These are not implied by table names or FKs. The final algorithm and tests must establish them; stronger declarative cross-table enforcement will be specified where practical during the review.
+
+### Notes to keep — transactional schema
+
+- Hold items preserve temporary-selection history; booking items preserve purchased-seat history and prices.
+- UNIQUE(show_seat_id) on booking_items enforces the no-double-confirmed-booking rule for v1. Cancellation/resale would require revisiting it.
+- UNIQUE(hold_id) on bookings prevents confirming a hold twice; a unique payment-attempt reference prevents one attempt producing multiple bookings.
+- Partial uniqueness enforces a rule for selected lifecycle states while retaining history.
+- Expiry is a time-based validity rule; stored statuses and indexes do not change just because a clock advances.
+- CHECK constraints validate row fields; multi-row counts, totals, and coordinated state changes also require transaction logic.
+- PAYMENT_PENDING protects inventory beyond an ordinary hold timer until its outcome is safely resolved.
+
+Source: [PostgreSQL partial unique indexes](https://www.postgresql.org/docs/current/indexes-partial.html).
