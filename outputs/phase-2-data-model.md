@@ -40,7 +40,7 @@ Keep temporal intent separate from a completed purchase:
 - `users`: authenticated owners.
 - `holds`: a temporary selection of seats for one user and one show, with an original expiry deadline and lifecycle state.
 - `hold_items`: membership of each selected show-seat in a hold. Retain membership after release/expiry so historical attempts remain understandable. Store a proposed server-calculated per-seat price snapshot here; the exact price-validity policy remains to be agreed.
-- `bookings`: confirmed booking identity, owner, show, originating hold, confirmation time, and server-calculated total.
+- `bookings`: confirmed booking identity, originating hold, payment attempt, confirmation time, and server-calculated total. Owner and show are derived through the hold after the normalization review below.
 - `booking_items`: seats and final per-seat price snapshots belonging to a confirmed booking.
 
 ```mermaid
@@ -157,7 +157,7 @@ Entity IDs and references use UUID. Amounts are INTEGER minor units; timestamps 
 | holds | id, user_id, show_id, status TEXT, seat_count SMALLINT, total_minor INTEGER, currency CHAR(3), created_at, expires_at, updated_at | User/show FKs; seat_count BETWEEN 1 AND 10; total_minor >= 0; currency INR; expires_at > created_at; allowed statuses |
 | hold_items | hold_id, show_seat_id, quoted_price_minor INTEGER | Composite PK(hold_id, show_seat_id); hold/inventory FKs; quoted_price_minor >= 0 |
 | payment_attempts | id, hold_id, amount_minor INTEGER, currency CHAR(3), status TEXT, gateway_key TEXT, gateway_reference TEXT nullable, created_at, updated_at | Hold FK; UNIQUE(gateway_key); amount_minor >= 0; currency INR; allowed states; success requires a gateway reference |
-| bookings | id, hold_id, user_id, show_id, payment_attempt_id, status TEXT, total_minor INTEGER, currency CHAR(3), confirmed_at | Relevant FKs; UNIQUE(hold_id); UNIQUE(payment_attempt_id); nonnegative total; initial status CONFIRMED; currency INR |
+| bookings | id, hold_id, payment_attempt_id, status TEXT, total_minor INTEGER, currency CHAR(3), confirmed_at | Hold/payment-attempt FKs; UNIQUE(hold_id); UNIQUE(payment_attempt_id); nonnegative total; initial status CONFIRMED; currency INR |
 | booking_items | booking_id, show_seat_id, paid_price_minor INTEGER | Composite PK(booking_id, show_seat_id); parent/inventory FKs; UNIQUE(show_seat_id) for v1; paid_price_minor >= 0 |
 | idempotency_records | id, user_id, operation TEXT, key TEXT, request_hash TEXT, status TEXT, payment_attempt_id nullable, response_status SMALLINT nullable, response_body JSONB nullable, created_at, updated_at | User/attempt FKs; UNIQUE(user_id, operation, key); status PROCESSING or COMPLETED; completed operations require a persisted terminal response |
 
@@ -235,3 +235,50 @@ These are not implied by table names or FKs. The final algorithm and tests must 
 - PAYMENT_PENDING protects inventory beyond an ordinary hold timer until its outcome is safely resolved.
 
 Source: [PostgreSQL partial unique indexes](https://www.postgresql.org/docs/current/indexes-partial.html).
+
+## Normalization review
+
+Working goal: keep each authoritative fact in its appropriate place, while explicitly documenting compatibility fields and historical snapshots. The whole schema is not claimed to be strictly in third normal form because some controlled redundancy is deliberate.
+
+### First normal form: individual seat membership is represented by rows
+
+Do not store a comma-separated `seat_ids` string as the representation of a hold. `hold_items` contains one seat membership per row, allowing FKs and a unique membership key. PostgreSQL arrays and JSON have valid uses, but using them as a substitute for constrained relational membership would complicate this design.
+
+### Second normal form: item facts depend on the whole composite key
+
+The hold-item key is `(hold_id, show_seat_id)`. A quoted seat price belongs to that seat in that hold's quote. The hold's owner and expiry depend on `hold_id` alone and therefore belong in `holds`, not repeated in every item.
+
+### Third normal form: avoid storing facts reached through other non-key fields
+
+Example: `screens.theatre_id` identifies a theatre whose `city_id` identifies the city. A screen should not separately store a mutable city name that can disagree with its theatre.
+
+Likewise, a booking's hold already identifies its owner and show:
+
+```text
+booking.id → booking.hold_id → hold.user_id, hold.show_id
+```
+
+Revision to the earlier draft: remove `user_id` and `show_id` from `bookings`; retrieve them through the immutable originating hold. This avoids extra consistency constraints at the cost of a join in authorization/history queries. The conceptual USER→BOOKING relationship in the ER diagram remains true but is derived rather than a direct FK. Preserve holds referenced by bookings and do not mutate their owner or show.
+
+This is a v1 simplicity choice. If a measured workload later justifies direct owner/show columns, adding them requires enforced compatibility (such as a composite FK), not trusting application copies to agree.
+
+### Deliberate repetition retained
+
+| Repetition | Why retain it | Required discipline |
+| --- | --- | --- |
+| `show_seats.screen_id` | Enables composite FKs to enforce seat/show screen compatibility | Both composite references must agree; extra columns/index entries are an explicit cost |
+| Quoted price in hold_items and paid price in booking_items | Preserve the accepted quote and confirmed purchase as historical records | Copy server-approved values; later catalogue price changes must not rewrite history |
+| `seat_count` / stored monetary totals | Explicit operation summaries and durable amount sent to the gateway | Derive from accepted item rows, validate range/sums, and write together transactionally |
+| Current allocation on show_seats versus historical item membership | Fast authoritative current ownership plus retained lifecycle history | Atomically coordinate state/reference changes with membership and booking writes |
+
+Snapshots capture a fact at an event, rather than being a cache that must track later catalogue changes. Summaries and current-state projections do carry synchronization obligations. Transactions, constraints where practical, and failure tests must enforce those obligations.
+
+## Notes to keep — normalization
+
+- Normalization prevents update, insertion, and deletion anomalies by organizing facts around their dependencies.
+- 1NF teaching example: one seat membership per item row, not a comma-separated seat list.
+- 2NF teaching example: hold owner/deadline belong on the hold, not on each composite-key hold item.
+- 3NF teaching example: derive city through theatre; derive booking owner/show through hold.
+- Remove duplicate booking owner/show fields in the working v1 schema; account for the resulting join when designing history indexes.
+- Historical price snapshots preserve meaning over time; they should not change with current catalogue prices.
+- Deliberate compatibility fields, summaries, and allocation projections require explicit enforcement and trade-offs; do not label the entire model fully normalized without qualification.
