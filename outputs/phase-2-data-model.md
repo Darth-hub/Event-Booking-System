@@ -78,3 +78,71 @@ Important distinctions:
 - A seat may have many historical holds but only one valid current allocation.
 - Preserve quoted and final prices rather than reconstructing old purchases from mutable catalogue prices.
 - Exact table count follows requirements; earlier prototype estimates are not a design constraint.
+
+## Payment attempts and request idempotency
+
+Proposed records:
+
+- `payment_attempts`: identity, hold, server-calculated amount, currency, status, stable gateway operation key, and gateway reference. Candidate states: PENDING, SUCCEEDED, FAILED, UNKNOWN.
+- `idempotency_records`: authenticated user, operation, client key, request fingerprint, processing state, and attempt/result reference. Unique `(user_id, operation, key)`; claiming and linking the operation must be atomic.
+
+One hold may have several sequential payment attempts after definitive failures, while each confirmation operation maps to one associated attempt. A successful attempt can produce at most one confirmed booking. Concurrent different-key requests for the same hold must not start competing payment attempts.
+
+Same key and same meaningful request recover the existing result or processing state. Same key with a different request is a conflict. A completed failure replays for that key; an intentional retry after definitive failure uses a new key, subject to the original hold deadline. Unknown outcomes recover the existing attempt and gateway key rather than creating a new charge.
+
+Example: confirmation key K1 → attempt P1 → gateway key G1 → booking B1. If the API response is lost after B1 commits, K1 returns B1. If the gateway response is lost, P1/G1 must first be recovered. Gateway key mapping is persisted before the external call.
+
+Payment success and confirmed booking remain distinct facts. Exact state transitions, request-fingerprint fields, retention, response replay, and safe recovery ownership are later-phase work.
+
+## Working schema conventions
+
+These are proposed design defaults, not implemented migrations:
+
+- UUID entity IDs; UUID values are identifiers, not authorization mechanisms.
+- Required business fields are NOT NULL unless explicitly optional.
+- Event/deadline timestamps use TIMESTAMPTZ. Catalogue city timezone uses an IANA name; initial Indian fixtures use Asia/Kolkata. A city-local browsing date is converted to timestamp range boundaries rather than assumed to be a UTC date.
+- Monetary values use integer minor units. For INR, ₹250 is stored as 25,000 paise. Initial currency is INR; limits and arithmetic validation still apply.
+- Positive quantities and nonnegative prices have CHECK constraints, in addition to NOT NULL.
+- Preserve booking history: do not choose cascading catalogue deletion rules that erase purchased records. Final deletion policy is pending.
+
+## Catalogue columns and constraints
+
+| Table | Proposed columns, besides UUID primary key | Main constraints |
+| --- | --- | --- |
+| cities | name TEXT, region TEXT, country_code CHAR(2), timezone_name TEXT | Required fields; city name alone is not globally unique |
+| theatres | city_id UUID, name TEXT, address TEXT | FK city_id → cities.id |
+| screens | theatre_id UUID, name TEXT | FK theatre_id → theatres.id; UNIQUE(theatre_id, name) |
+| seats | screen_id UUID, row_label TEXT, seat_number INTEGER, seat_type TEXT | FK screen_id → screens.id; UNIQUE(screen_id, row_label, seat_number); seat_number > 0; allowed seat types |
+| movies | title TEXT, duration_minutes INTEGER, language TEXT | duration_minutes > 0; title alone is not unique |
+| shows | movie_id UUID, screen_id UUID, starts_at TIMESTAMPTZ, ends_at TIMESTAMPTZ | Movie/screen FKs; ends_at > starts_at |
+| show_seats | show_id UUID, seat_id UUID, screen_id UUID, price_minor INTEGER, currency CHAR(3), allocation state and references to be detailed next | UNIQUE(show_id, seat_id); price_minor >= 0; initial currency INR; same-screen integrity as below |
+
+All listed business fields are required; allocation references will have explicit nullable rules in the transactional schema. Creation/update audit timestamps will be specified where needed; they are omitted from this teaching table.
+
+### Enforce seat/show screen compatibility
+
+Proposed controlled duplication: retain `screen_id` in `show_seats` to enforce both relationships using composite foreign keys:
+
+```text
+shows:      UNIQUE(id, screen_id)
+seats:      UNIQUE(id, screen_id)
+show_seats: FOREIGN KEY(show_id, screen_id) REFERENCES shows(id, screen_id)
+show_seats: FOREIGN KEY(seat_id, screen_id) REFERENCES seats(id, screen_id)
+```
+
+The referenced unique constraints are required even though id alone is already unique. This spends redundant columns/index entries to make the same-screen rule declarative. The final normalization/index review should acknowledge this trade-off. Both composite-key columns must be NOT NULL so null values cannot bypass matching.
+
+A CHECK cannot perform the cross-table screen lookup. Use foreign keys for that relationship; row-level CHECK rules cover things such as nonnegative prices and ends_at > starts_at.
+
+Unresolved: preventing overlapping show schedules in one screen, transactionally provisioning complete inventory, selected seat-type vocabulary, and the hold/booking allocation columns. No prototype table-count limit overrides these requirements.
+
+### Notes to keep — columns and constraints
+
+- Primary key identifies a row; foreign key connects it to a valid related row.
+- UNIQUE can apply to a combination, such as a seat label within one screen.
+- CHECK constrains values in the row; NOT NULL must also be specified for mandatory values.
+- Composite foreign keys can enforce compatibility between related entities.
+- Integer minor units avoid binary floating-point rounding in monetary arithmetic.
+- TIMESTAMPTZ represents an instant; retain the relevant locality's timezone separately for city/date browsing.
+
+Source: [PostgreSQL constraints](https://www.postgresql.org/docs/current/ddl-constraints.html).
