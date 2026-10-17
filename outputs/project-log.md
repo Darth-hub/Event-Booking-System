@@ -4,7 +4,7 @@ Started: 16 October 2026 (Asia/Kolkata)
 
 ## Current position
 
-Phase 2: Data model — catalogue relationships, hold/booking aggregates, and payment/idempotency concepts discussed. Proposed catalogue columns and constraints documented; transactional columns, normalization/index review, and the phase checkpoint remain pending. See [data model notes](phase-2-data-model.md), [Phase 0 requirements](phase-0-requirements.md), and [HLD](phase-1-hld.md).
+Phase 2: Data model — catalogue and transactional columns/constraints proposed. Normalization/composite-key review, remaining scheduling integrity, query indexes, and the phase checkpoint remain pending. See [data model notes](phase-2-data-model.md), [Phase 0 requirements](phase-0-requirements.md), and [HLD](phase-1-hld.md).
 An initial HLD baseline is documented; schema, API contracts, and application implementation remain pending.
 Phase 0 checkpoint attempted; a daily-versus-concurrent-user follow-up remains unassessed. The Phase 1 hold-durability/statelessness checkpoint passed.
 
@@ -186,3 +186,11 @@ Use https://github.com/Darth-hub/Event-Booking-System for project work. Agree on
 - Specified working catalogue columns and core PK/FK/UNIQUE/CHECK rules in the data-model document.
 - Proposed retaining screen_id in show_seats with composite foreign keys to enforce that physical seats and shows share the screen. Recorded the controlled redundancy and associated constraint/index cost.
 - Show scheduling overlap, complete inventory provisioning, transactional schema, normalization, indexes, and Phase 2 checkpoint remain open. No SQL migrations or application code have been written.
+
+### 17 October 2026 — transactional schema proposal
+
+- Added concrete working columns for users, holds/items, bookings/items, payment attempts, request idempotency, and current show-seat allocation.
+- Proposed direct guardrails: unique booking per hold and payment attempt, unique confirmed-booking item per show-seat, scoped request keys, and unique gateway keys.
+- Proposed partial unique indexes for one live hold per user/show and one pending/unknown/successful payment attempt per hold. Requests must retire expired ordinary holds transactionally; time-based validity is not an automatically updating index predicate.
+- Distinguished row-level constraints from transaction invariants: full seat-set acquisition, item counts, totals, ownership/show compatibility, and coordinated transitions. Listed remaining composite-key and recovery work explicitly.
+- Updated study notes. Phase 2 has not been marked complete and no implementation has started.
