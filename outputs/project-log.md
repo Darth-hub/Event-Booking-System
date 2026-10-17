@@ -4,7 +4,7 @@ Started: 16 October 2026 (Asia/Kolkata)
 
 ## Current position
 
-Phase 2: Data model — catalogue relationships and proposed user/hold/booking aggregates discussed. Schema columns, normalization review, constraints, indexes, and the phase checkpoint remain pending. See [data model notes](phase-2-data-model.md), [Phase 0 requirements](phase-0-requirements.md), and [HLD](phase-1-hld.md).
+Phase 2: Data model — catalogue relationships, hold/booking aggregates, and payment/idempotency concepts discussed. Proposed catalogue columns and constraints documented; transactional columns, normalization/index review, and the phase checkpoint remain pending. See [data model notes](phase-2-data-model.md), [Phase 0 requirements](phase-0-requirements.md), and [HLD](phase-1-hld.md).
 An initial HLD baseline is documented; schema, API contracts, and application implementation remain pending.
 Phase 0 checkpoint attempted; a daily-versus-concurrent-user follow-up remains unassessed. The Phase 1 hold-durability/statelessness checkpoint passed.
 
@@ -178,3 +178,11 @@ Use https://github.com/Darth-hub/Event-Booking-System for project work. Agree on
 - Proposed separate users, holds/hold_items, and bookings/booking_items so multi-seat selections and purchases are explicit aggregates with preserved membership and price snapshots.
 - Distinguished historical hold membership from current allocation, and temporary holds/payment attempts from confirmed bookings. Payment/idempotency modelling is next.
 - Saved the conceptual ER diagrams, reasoning, open issues, and study notes in `phase-2-data-model.md`. These are proposals, not a finalized schema or a passed checkpoint.
+
+### 17 October 2026 — payment records and catalogue schema
+
+- Captured the payment-attempt versus client-operation distinction, scoped atomic idempotency claims, request fingerprints, persisted gateway keys, and retry behavior after definitive failure versus uncertain outcome.
+- Proposed schema conventions: UUID entity IDs, required-field NOT NULL constraints, TIMESTAMPTZ instants, IANA locality timezones, and integer minor-unit prices (initial currency INR).
+- Specified working catalogue columns and core PK/FK/UNIQUE/CHECK rules in the data-model document.
+- Proposed retaining screen_id in show_seats with composite foreign keys to enforce that physical seats and shows share the screen. Recorded the controlled redundancy and associated constraint/index cost.
+- Show scheduling overlap, complete inventory provisioning, transactional schema, normalization, indexes, and Phase 2 checkpoint remain open. No SQL migrations or application code have been written.
