@@ -4,7 +4,7 @@ Started: 16 October 2026 (Asia/Kolkata)
 
 ## Current position
 
-Phase 2: Data model — catalogue and transactional columns/constraints proposed. Normalization/composite-key review, remaining scheduling integrity, query indexes, and the phase checkpoint remain pending. See [data model notes](phase-2-data-model.md), [Phase 0 requirements](phase-0-requirements.md), and [HLD](phase-1-hld.md).
+Phase 2: Data model — catalogue/transactional schema and normalization reviewed. Working booking schema now derives owner/show through its originating hold. Remaining composite-key/scheduling integrity, query indexes, and the phase checkpoint are pending. See [data model notes](phase-2-data-model.md), [Phase 0 requirements](phase-0-requirements.md), and [HLD](phase-1-hld.md).
 An initial HLD baseline is documented; schema, API contracts, and application implementation remain pending.
 Phase 0 checkpoint attempted; a daily-versus-concurrent-user follow-up remains unassessed. The Phase 1 hold-durability/statelessness checkpoint passed.
 
@@ -194,3 +194,10 @@ Use https://github.com/Darth-hub/Event-Booking-System for project work. Agree on
 - Proposed partial unique indexes for one live hold per user/show and one pending/unknown/successful payment attempt per hold. Requests must retire expired ordinary holds transactionally; time-based validity is not an automatically updating index predicate.
 - Distinguished row-level constraints from transaction invariants: full seat-set acquisition, item counts, totals, ownership/show compatibility, and coordinated transitions. Listed remaining composite-key and recovery work explicitly.
 - Updated study notes. Phase 2 has not been marked complete and no implementation has started.
+
+### 17 October 2026 — normalization review
+
+- Explained normal forms through this schema: individual seat membership rows, hold-level versus item-level dependencies, and avoiding transitive copies of city/ownership facts.
+- Revised the working bookings table to remove user_id and show_id; derive both through the immutable originating hold. Recorded the join cost and implications for authorization/history indexes and hold retention.
+- Retained show_seats.screen_id for declarative compatibility, historical quote/purchase prices, operation summaries, and current allocation state; documented their distinct reasons and synchronization requirements.
+- Preserved the earlier schema proposal in decision history rather than claiming it was unchanged. No whole-schema 3NF claim or checkpoint pass is made. Next: query-driven indexes and remaining integrity review.
